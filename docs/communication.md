@@ -81,3 +81,9 @@ Heartbeat checks identify broken connections. The server removes closed connecti
 - Bids at or after the end time are rejected.
 - Reconnecting clients recover the latest state.
 - Duplicate or out-of-order events do not roll back the displayed state.
+
+## Skeleton implementation update (2026-11-03)
+
+Only `GET /api/health` is implemented in each service (ports 8081–8084). All business HTTP interfaces, internal event delivery and WebSocket flows described above remain planned.
+
+See [Local development](local-development.md) for startup and verification instructions.

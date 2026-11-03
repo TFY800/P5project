@@ -59,3 +59,9 @@ Open the same auction in two browser sessions. Submit a valid bid in one session
 5. Verify the complete workflow, disconnection recovery and concurrent bidding.
 
 See [Architecture](architecture.md) and [Communication](communication.md).
+
+## Skeleton implementation update (2026-11-03)
+
+The initial skeleton now exists: four independent Spring Boot services with health endpoints and a static HTML client. The minimum business scope above remains planned; registration/login, databases, auctions, notifications and WebSocket are not implemented.
+
+See [Local development](local-development.md) for startup and verification instructions.

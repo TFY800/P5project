@@ -53,3 +53,9 @@ The Notification Service does not determine prices or winners. Clients recover a
 ## Technology decisions
 
 Programming language, framework, database product and WebSocket library are not selected yet. HTTP APIs and WebSocket are planned communication choices. A message broker is not required for the initial design.
+
+## Skeleton implementation update (2026-11-03)
+
+The backend stack is now Java 21, Spring Boot 4.1.2 and Maven. Four independent service skeletons and a static HTML client exist. Database products remain undecided; no persistence, business APIs or WebSocket connections are implemented.
+
+See [Local development](local-development.md) for startup and verification instructions.
