@@ -35,3 +35,7 @@ out/
 *.p12
 *.pfx
 *.jks
+
+# Local PostgreSQL cluster, process records and runtime logs
+.local/
+__pycache__/

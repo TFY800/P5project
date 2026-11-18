@@ -1,61 +1,64 @@
-# Planned Architecture
+# Architecture
 
-## Service boundaries
+The local basic version implements four independent services. Earlier design documents are preserved under [history/skeleton-2026-11-03](history/skeleton-2026-11-03/README.md).
 
-Each service will run as a separate process and expose a network interface. They may run on the same development computer and live in this single repository.
-
-| Component | Responsibilities | Owned data |
-|---|---|---|
-| User Service | Registration, login, identity and token issuance | Users and password hashes |
-| Item Service | Create and browse listings; enforce ownership and listing edit rules | Items, seller IDs, descriptions and image references |
-| Auction Service | Auction lifecycle, bid validation, bid history, current price and winner selection | Auctions, accepted bids and pending notification events |
-| Notification Service | Manage WebSocket connections and auction subscriptions; distribute updates | In-memory subscriptions; no database required initially |
-| Web Client | Display listings and auctions; submit user actions; render live updates | Temporary UI state |
-
-Auction and bidding remain together because accepting a bid requires a consistent decision about the auction state and current price. Notification delivery is separated from that business decision.
-
-Each persistent service owns its data. Other services use its API rather than directly accessing its tables. Separate logical databases may share a database server during development.
-
-## Component diagram
+| Service | Owns | Storage |
+| --- | --- | --- |
+| User | Registration, BCrypt hashes, JWT issuance, current-user profile | `p5_user`, role `p5_user` |
+| Item | Item descriptions, seller ownership, immutable auction freeze ID | `p5_item`, role `p5_item` |
+| Auction | Creation recovery, snapshots, bids, deadlines, winners, outbox | `p5_auction`, role `p5_auction` |
+| Notification | Active WebSocket sessions and auction subscriptions | In memory, no database |
 
 ```mermaid
 flowchart TD
-    C["Web Client"]
-    U["User Service"]
-    I["Item Service"]
-    A["Auction Service"]
-    N["Notification Service"]
-
-    C -->|"HTTP: register and log in"| U
-    C -->|"HTTP: manage and browse items"| I
-    C -->|"HTTP: auctions and bids"| A
-    A -->|"HTTP: validate and freeze listing"| I
-    A -->|"HTTP: committed business events"| N
-    C -->|"WebSocket: subscribe"| N
-    N -->|"WebSocket: live updates"| C
+    C["Browser · localhost:8080"]
+    U["User · 8081"]
+    I["Item · 8082"]
+    A["Auction · 8083"]
+    N["Notification · 8084"]
+    UD[(p5_user)]
+    ID[(p5_item)]
+    AD[(p5_auction)]
+    C -->|"HTTP auth / me"| U
+    C -->|"HTTP create / edit / browse"| I
+    C -->|"HTTP auctions / bids / snapshots"| A
+    C <-->|"WebSocket subscriptions / hints"| N
+    A -->|"Authenticated idempotent freeze"| I
+    A -->|"Authenticated outbox delivery"| N
+    U --> UD
+    I --> ID
+    A --> AD
 ```
 
-## Data and business decisions
+The databases may share one PostgreSQL instance; accounts have no cross-database access. A browser-supplied seller/bidder ID is never authoritative. The JWT subject supplies identity; the trusted Auction service passes the seller ID to Item's authenticated internal freeze endpoint.
 
-- The Auction Service stores the seller ID when an auction is created, after validating ownership with the Item Service.
-- Listing freeze and auction creation need an idempotent workflow with compensation if creation fails; they are not one cross-service database transaction.
-- Bid acceptance and auction closure use the same database concurrency control so that an ended auction cannot accept a late bid.
-- Bid records, the current price, leading bidder and auction version are updated in one local transaction.
-- Finalization is performed by a server-side task. An auction with no accepted bids ends without a winner.
-- Passwords are stored as hashes. Protected endpoints validate login tokens and authorization.
+## Creation workflow
 
-## Reliability approach
+```mermaid
+stateDiagram-v2
+    [*] --> PREPARING: Persist request key and reserve item
+    PREPARING --> PREPARING: Timeout / restart / retry same freeze ID
+    PREPARING --> FAILED: Definitive Item rejection
+    PREPARING --> ACTIVE: Freeze confirmed and snapshot saved
+    ACTIVE --> ENDED: Server deadline reached
+    ENDED --> [*]
+    FAILED --> [*]
+```
 
-A pending event is stored in the Auction Service database in the same transaction as the corresponding business change. A background dispatcher sends it to the Notification Service and retries failed deliveries. Events have unique IDs and auction versions because retries can cause duplicates.
+Only one non-failed auction is permitted per item. Creation returns 202 and a durable ID even if PREPARING. A recovery task resumes incomplete reservations every three seconds. Item freezing uses its own row lock; repeating the same auction ID succeeds, a different ID conflicts. No unlock is attempted after a timeout because the freeze may have succeeded. A failed ownership request does not freeze the item. Pending requests are resumed after service restart; expiry during recovery immediately produces an ended, unsold auction.
 
-The Notification Service does not determine prices or winners. Clients recover authoritative state from the Auction Service after reconnecting or detecting a version gap.
+This first version keeps successful item freezes after auction end and does not offer cancellation or relisting the same item. Details are copied from the confirmed freeze into Auction, so browsing an existing auction remains possible while Item is temporarily unavailable.
 
-## Technology decisions
+## Bidding and finalization
 
-Programming language, framework, database product and WebSocket library are not selected yet. HTTP APIs and WebSocket are planned communication choices. A message broker is not required for the initial design.
+`AuctionRepository.lock()` uses a PostgreSQL pessimistic write lock. Both `AuctionTransactions.bid()` and `end()` use it. Server time is checked after the lock, so a request queued before the deadline can still be rejected when it acquires the row afterwards. Accepted bid, highest price, leader, version and outbox entry are one transaction. The finalizer runs every second and scans overdue ACTIVE rows, including those missed while offline.
 
-## Skeleton implementation update (2026-11-03)
+First bid: at least starting price. Later bid: at least current price + minimum increment. Seller bids are rejected. Money is bounded integer HUF, never floating point. A successful bidder/key replay returns the original bid even after expiry; reusing a key with a different amount conflicts. Unique database constraints complement row locks. Winner is the last accepted leader when status becomes ENDED; no leader means unsold.
 
-The backend stack is now Java 21, Spring Boot 4.1.2 and Maven. Four independent service skeletons and a static HTML client exist. Database products remain undecided; no persistence, business APIs or WebSocket connections are implemented.
+Detail snapshots read auction state and the latest 50 bids within a repeatable-read transaction. Older history is paginated. Public list queries use bounded pagination; personal queries select selling, participated or won auctions.
 
-See [Local development](local-development.md) for startup and verification instructions.
+## Reliability and operational boundaries
+
+Outbox rows are committed with price/end changes. Delivery takes separate outbox locks with SKIP LOCKED and finite HTTP timeouts; failures retry with bounded exponential delays. They never roll back a previously accepted bid. Duplicate/late/out-of-order pushes are expected, so the frontend reads authoritative snapshots and ignores stale versions. Pushes contain no bidder email or password information.
+
+Local servers bind loopback, browser origin is explicit, and internal event/freeze routes require a separate shared secret. Public auctions can be watched without logging in. JWTs expire after one hour. This is a local course project, not a hardened public deployment. See [decisions](decisions.md), [API protocol](communication.md) and [scope](project-description.md).

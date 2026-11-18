@@ -1,67 +1,41 @@
 # Second-Hand Auction Platform
 
-## Project goal
+## Goal and current state
 
-Build a web application where users can list second-hand items and participate in timed auctions. Participants receive live price updates without refreshing the page.
+A Programming 5 course application where sellers list second-hand items, buyers place timed bids, and viewers see accepted price updates without refreshing. The local basic version is implemented and verified as described in [verification](verification.md). The original design-stage text remains in [history](history/skeleton-2026-11-03/docs/project-description.md).
 
-This is a Programming 5 course project. The repository currently contains the project design; the application is not implemented yet.
+## Implemented scope
 
-## Target users
+- Registration/login/current-user profile; unique normalized email and BCrypt hashes.
+- Publish/browse/view/edit owned items, using HTTP(S) image URLs.
+- Immediately starting auctions with positive integer HUF prices, minimum raises and future deadlines.
+- Seller ownership and item freezing; recoverable creation with stable IDs.
+- Transactional, concurrent bidding with server deadlines and idempotent retries.
+- Background expiry, correct winner or unsold state, persisted data and restart recovery.
+- Transactional outbox retry and auction-scoped WebSocket pushes.
+- English responsive client with search, publish workflow, details, history, selling/participated/won views, session login, connection states and recovery.
 
-- Sellers who want to auction second-hand items.
-- Buyers who want to browse items and place bids.
+A user may act as both seller and buyer, but cannot bid on their own auction. The seller comes from the verified JWT, not the request body. Whole HUF amounts are bounded at 10^12. An auction with no bids is not sold; its displayed current price is the starting price, not a winning bid.
 
-A registered user may act as both buyer and seller.
+## Course requirements
 
-## Minimum scope
+| Requirement | Implementation |
+| --- | --- |
+| Four independently built/running services | Four Maven Wrapper projects, ports 8081–8084 |
+| At least one client | Plain HTML/CSS/JS on fixed HTTP port 8080 |
+| Real-time communication | Subscription-scoped WebSocket hints and authoritative snapshot recovery |
+| Persisted data | Separate PostgreSQL databases and Flyway migrations |
+| Markdown description and diagrams | Current docs, Mermaid architecture and sequence/state diagrams |
+| Testable business rules | Real PostgreSQL concurrency/recovery HTTP suite and client synchronization tests |
 
-- Register and log in.
-- Publish and browse item listings.
-- Create an auction with a starting price, minimum bid increment and end time.
-- View the current price and bid history.
-- Submit a bid while the auction is active.
-- Receive live price updates and auction-ended notifications.
-- Display the winner after an auction ends, or indicate that no bids were placed.
+## Limits
 
-Payment processing, shipping, private chat and automatic proxy bidding are outside the first version.
+No payments, shipping, private chat, file upload, proxy bidding, email verification, password reset or complex roles. No Docker, message broker, registry or gateway. One successful auction per item, including ended auctions; create a new item for another auction. No manual auction cancellation. Persistent PREPARING requests require fixing an unavailable service/configuration; they are retried automatically.
 
-## Course requirement mapping
+The client stores a one-hour JWT in sessionStorage per tab. This is susceptible to same-origin script access and does not offer refresh tokens or server-side logout/revocation. Auctions and bidder UUIDs are public, but emails are not in auction events. Image URLs load external resources and may be unavailable or reveal the viewer's IP to the image host; credentials/referrers are not sent by the application. Choose trusted image hosts.
 
-| Requirement | Planned implementation |
-|---|---|
-| At least four independently running services | User, Item, Auction and Notification services |
-| At least one client | Browser-based web client |
-| Real-time communication | WebSocket price and auction-status updates |
-| Project description in Markdown under docs | Documents in this directory |
-| Mermaid diagrams | Architecture and communication diagrams |
-
-## Core rules
-
-- Only authenticated users can publish items and place bids.
-- Only an item's owner can create its auction.
-- A seller cannot bid on their own auction.
-- The first bid must meet the starting price; subsequent bids must meet the current price plus the minimum increment.
-- The Auction Service uses server time to decide whether bidding is open.
-- Accepted bids and the corresponding current price are committed atomically.
-- The highest accepted bid wins when the auction ends.
-- Listing details are frozen while their auction is active.
+The local version has no production rate limiting, automated outbox retention, email deliverability verification, operational dashboard or load-test guarantee. HMAC and internal shared secrets are intended for one developer's loopback setup. Public deployment needs further security/operations work and HTTPS.
 
 ## Demonstration
 
-Open the same auction in two browser sessions. Submit a valid bid in one session and observe the new price in both sessions without refreshing. Also demonstrate a rejected low bid and the final auction result.
-
-## Implementation stages
-
-1. Agree on the design and select the technology stack.
-2. Implement User and Item services and a basic web client.
-3. Implement auctions, bid validation and concurrency control.
-4. Implement the Notification Service and WebSocket subscriptions.
-5. Verify the complete workflow, disconnection recovery and concurrent bidding.
-
-See [Architecture](architecture.md) and [Communication](communication.md).
-
-## Skeleton implementation update (2026-11-03)
-
-The initial skeleton now exists: four independent Spring Boot services with health endpoints and a static HTML client. The minimum business scope above remains planned; registration/login, databases, auctions, notifications and WebSocket are not implemented.
-
-See [Local development](local-development.md) for startup and verification instructions.
+Register in two separate tabs. Publish an item and auction as seller. Open its details as buyer, place a valid bid, then a higher one and observe the seller's price/history update. Use a short deadline to observe sold/unsold results. Stop Notification, submit a bid, then restart Notification: the committed price remains and subscribers resynchronize. Automated tests also demonstrate rejected bids, ownership checks, parallel bids, idempotency and restart recovery.
