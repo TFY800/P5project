@@ -9,4 +9,4 @@ My project for Programming 5 is **SecondRound**, a website for second-hand aucti
 
 [Run the project, try live bidding, or see what I finished each week](project/README.md).
 
-[Presentation 01-01 · What Does Architecture Mean?](presentation/01-01/README.md)
+[Presentation 01-01 · SecondRound](presentation/01-01/README.md)

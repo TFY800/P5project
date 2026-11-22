@@ -3,10 +3,11 @@ week: 01
 id: "01-01"
 ---
 
-# What Does Architecture Mean?
+# SecondRound · Project Presentation
 
-This presentation uses SecondRound to explain three ways of looking at a system: how its code is organized, what runs when someone uses it, and what can be released separately.
+SecondRound is a second-hand auction website. This presentation follows one bid from the buyer's browser to the auction database and back to another browser. It uses the actual project code to explain how the four services work together and how the design relates to Programming 5.
 
-- [Open the PowerMD slides](presentation.md)
-- [Course lesson](https://pte-mik.github.io/info/programming-5-en/content/01/01-01-architecture-views/)
-- [SecondRound project](../../project/README.md)
+- [PowerMD slides](presentation.md)
+- [Run the project and try live bidding](../../project/README.md#try-live-bidding)
+- [Architecture and service interactions](../../project/docs/architecture.md)
+- [Programming 5 course material](https://pte-mik.github.io/info/programming-5-en/)

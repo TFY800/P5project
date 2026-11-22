@@ -1,101 +1,146 @@
-<!--@slide Opening-->
-# What Does Architecture Mean?
+<!--@slide SecondRound-->
+# SecondRound
 
-Code, runtime and deployment
+A second-hand auction website
 
-TAOFUYUAN · Programming 5 · 01-01
+TAOFUYUAN · Programming 5
 
-> If an app has four folders, does it have four services?
+- A seller lists a used item and sets a starting price and an end time.
+- Buyers place bids in HUF.
+- Everyone watching the auction can see the new price without refreshing.
 
 <!-- @note -->
-> Start with the question. Explain that a folder tells us where code lives. We also have to look at how the app runs and how it is released.
+> Start with two browsers. A buyer places a bid in one, and the seller sees the price change in the other. The rest of the presentation explains what happens between those two screens.
 
 ---
 
-<!--@slide Three views-->
-# Three views of one system
+<!--@slide Architecture-->
+# One client, four services
 
-| View | Question |
-| --- | --- |
-| Code | Where is each responsibility implemented? |
-| Runtime | What is running, and how do the parts talk? |
-| Deployment | What can we release or replace separately? |
+```mermaid
+flowchart TD
+    C["Browser · 8080"]
+    U["User · 8081"]
+    I["Item · 8082"]
+    A["Auction · 8083"]
+    N["Notification · 8084"]
+    C -->|"HTTP · log in"| U
+    C -->|"HTTP · list or edit"| I
+    C -->|"HTTP · browse or bid"| A
+    C <-->|"WebSocket · auction updates"| N
+```
 
-Architecture is about the parts, their relationships and decisions that are hard to change later.
+User, Item and Auction each own a PostgreSQL database. Notification keeps active subscriptions in memory.
 
 <!-- @note -->
-> For example, renaming a Java method is usually a local change. Turning that method into a network call changes how the caller sends data and handles a failure.
+> User issues login tokens. Item stores the listings. Auction decides which bids to accept and who wins. Notification tells the subscribed browsers about changes. The databases share one local PostgreSQL instance, with a separate database and account for each service that stores data. The Java services are separate Maven projects and run as separate processes.
 
 ---
 
-<!--@slide Code-->
-# Code view
+<!--@slide Publishing-->
+# Publishing crosses a service boundary
 
-I keep SecondRound in one GitHub repository.
-
-- `user-service` handles accounts and login.
-- `item-service` stores the items for sale.
-- `auction-service` decides which bids to accept and when auctions end.
-- `notification-service` tells viewers when an auction changes.
+1. The browser sends the listing to Item.
+2. The browser asks Auction to start an auction for that item.
+3. Auction saves a pending record and calls Item over HTTP to freeze the listing.
+4. After Item confirms the freeze, Auction starts the auction.
 
 <!-- @note -->
-> Use bidding as the example. I look in Auction for the minimum-bid rule. I look in Notification to see which browsers receive the update. Each of the four folders is a Maven project.
+> The internal endpoint is POST /internal/items/{id}/freeze. If the call times out, Auction keeps the pending record and retries with the same auction ID. Item can confirm an earlier freeze for that ID. This is why the code saves the pending record before making the network call. The auction keeps a copy of the frozen details.
 
 ---
 
-<!--@slide Runtime-->
-# Runtime view · A bid comes in
+<!--@slide Controller-->
+# Code · Receiving a bid
+
+`POST /api/auctions/{id}/bids`
+
+```java
+AuctionService.key(key);
+return tx.bid(id, UUID.fromString(jwt.getSubject()), key, request.amount());
+```
+
+- The URL gives the auction ID.
+- The verified JWT gives the bidder's ID.
+- The request body gives the amount. The request header carries the retry key.
+
+[Open AuctionController.java](../../project/auction-service/src/main/java/com/p5auction/auction/controller/AuctionController.java#L21)
+
+<!-- @note -->
+> The two statements come from the real Controller. Whitespace was adjusted for the slide. Spring MVC reads the path, the body and Idempotency-Key. Spring Security supplies the verified token. The call to tx.bid is a Java method call within the auction service.
+
+---
+
+<!--@slide Transaction-->
+# Code · Accepting a bid
+
+Inside `AuctionTransactions.bid()`
+
+1. Lock the auction row. If the same bidder and key were already used for this amount, return the earlier bid.
+2. Check the deadline, the seller rule and the minimum bid.
+3. Save the bid, the new auction state and a notification record in one transaction.
+
+```java
+Bid bid = bids.save(new Bid(a, bidder, amount, key));
+event(a, "price_updated");
+```
+
+[Open AuctionTransactions.java](../../project/auction-service/src/main/java/com/p5auction/auction/service/AuctionTransactions.java#L50)
+
+<!-- @note -->
+> Two bids for the same auction have to take the same lock. The second request checks the latest price when it gets the lock. event(...) saves a row in the outbox table inside the same transaction. Auction can retry sending this event later if Notification is unavailable.
+
+---
+
+<!--@slide Realtime-->
+# How the other browser gets the new price
 
 ```mermaid
 sequenceDiagram
-    participant B as Buyer
     participant A as Auction
     participant N as Notification
-    participant V as Viewer
-    B->>A: Submit bid over HTTP
-    Note over A: Save accepted bid
-    A->>N: Send price change over HTTP
-    N-->>V: Send WebSocket update
-    V->>A: Read current price and bids
+    participant V as Watching browser
+    Note over A: Bid and outbox event committed
+    A->>N: Send event over internal HTTP
+    N-->>V: Push update over WebSocket
+    V->>A: GET current price and bid history
+    A-->>V: Return the latest auction details
 ```
 
+The page also reads the latest details after reconnecting.
+
 <!-- @note -->
-> Auction and Notification are separate Java processes on ports 8083 and 8084. Once a bid is saved, a background job in Auction sends the event to Notification. The viewer's browser then reads the latest auction data. If the notification arrives late, the saved bid still exists.
+> Auction sends the event from a scheduled job. Notification only pushes it to browsers subscribed to this auction. The WebSocket message tells the browser something changed, and the browser reads the current price over HTTP. A ten-second HTTP check is the fallback if a push is missed.
 
 ---
 
-<!--@slide Deployment-->
-# Deployment view
+<!--@slide Programming 5-->
+# Where this fits in Programming 5
 
-Each backend builds its own JAR. If I change only Notification, I can rebuild and restart that service while Auction keeps running.
+| Course topic | Where to see it in SecondRound |
+| --- | --- |
+| Architecture views and microservices · Ch. 1, 3 | One GitHub repo, four backend builds and four running service processes |
+| Data ownership and consistency · Ch. 5 | Separate databases. Auction commits the bid and its outbox event together. |
+| Remote calls, retries and identity · Ch. 6 | Auction calls Item over HTTP. The same bid key is reused after a timeout. The service reads user identity from the JWT. |
+| HTTP APIs · Ch. 7 | The browser submits a bid with POST and reads the auction state with GET. |
+| Events and delivery · Ch. 4, 8 | Auction sends price changes in the background and retries failed deliveries. |
+| Polling and WebSocket · Ch. 9, 10 | Notification pushes changes. The browser reads the latest state and falls back to polling. |
 
-The Mac startup script starts the services together for convenience. Each service still has its own build and process.
+[Programming 5 course material](https://pte-mik.github.io/info/programming-5-en/)
 
 <!-- @note -->
-> This example assumes the HTTP and WebSocket contracts stay compatible. The Notification Maven Wrapper can build its JAR on its own. Use the service-specific stop and start commands to restart only Notification.
+> Point to one example per row. The strongest example of a trade-off is that a bid can be saved while Notification is offline. The browser may see the update later, once it reconnects or checks Auction again.
 
 ---
 
-<!--@slide Quick check-->
-# Four processes, how many releases?
+<!--@slide Demo-->
+# Demo · Watch a bid appear
 
-Imagine four copies of the same app running to handle more traffic. Each copy comes from the same release package.
+1. Sign in as the seller and open a published auction.
+2. Open the same auction as a buyer in a separate browser profile. Place a valid bid.
+3. Look at the seller's screen. The price and bid history update while the page stays open.
 
-<!-- @reveal -->
-
-- **Runtime** has four running instances.
-- **Deployment** has one deployable application.
+[Open the demo instructions](../../project/README.md#try-live-bidding)
 
 <!-- @note -->
-> Ask the room, then reveal the answer. If the team fixes one part of the app, it still rebuilds and releases the whole package. All four copies then run that release.
-
----
-
-<!--@slide Takeaway-->
-# How I check a service boundary
-
-1. Find where the responsibility lives in the code.
-2. Trace the calls between the running parts.
-3. Check what can be built and released on its own.
-
-[Course lesson 01-01](https://pte-mik.github.io/info/programming-5-en/content/01/01-01-architecture-views/)
+> Give the auction enough time so it stays open during the demo. Point to the price and bid history in both windows. If there is time, let the auction end so the audience can see the winning bid.
