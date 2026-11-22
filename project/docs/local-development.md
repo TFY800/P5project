@@ -2,7 +2,7 @@
 
 ## 环境与目录
 
-本机仓库：`/Users/shilo/Projects/P5project`；远程仓库：[TFY800/P5project](https://github.com/TFY800/P5project)。请勿打开旧的 `Documents/ChatGPT/P5 project` 目录。
+应用在仓库的 `project/` 目录。脚本在 `project/` 下运行，运行数据、凭据和缓存仍在仓库根目录的 `.local/`、`.env` 和 `.build-cache/`。 [项目仓库](https://github.com/TFY800/P5project)
 
 - JDK 21；本机实际验证为 Temurin 21.0.10 arm64。
 - Python 3（脚本仅使用标准库）。
@@ -15,7 +15,7 @@
 ## 初始化数据库（先审查脚本）
 
 ```sh
-cd /Users/shilo/Projects/P5project
+cd project  # 从仓库根目录进入
 java -version
 python3 --version
 # 有 PostgreSQL 时可设置 PG_BIN=/your/postgresql/bin，无须编译。
@@ -38,7 +38,7 @@ python3 scripts/dev.py db-init
 
 ## 一键启动（推荐）
 
-在 Finder 中打开仓库，双击根目录的 `Start.command`。它会自动选择已安装的 JDK 21，检查依赖，启动/初始化本仓库数据库，按源码与 JAR 摘要判断是否需要构建，然后启动四个服务和固定端口网页，健康检查通过后自动打开 `http://localhost:8080`。
+在 Finder 中打开仓库的 `project/` 目录，双击 `Start.command`。如果此前运行的是旧目录结构，先双击 `project/Stop.command` 停止旧的应用进程，然后再启动。它会自动选择已安装的 JDK 21，检查依赖，启动/初始化本仓库数据库，按源码与 JAR 摘要判断是否需要构建，然后启动四个服务和固定端口网页，健康检查通过后自动打开 `http://localhost:8080`。
 
 首次缺少 PostgreSQL 时，会尝试调用现有 `bootstrap-postgres.sh` 在仓库内编译，需要网络和 Apple 编译工具；缺少 Python 3/JDK 21/工具时会明确提示，不会进行系统安装。第一次 Maven 下载可能较慢，请保留终端窗口等待完成。
 
@@ -101,8 +101,8 @@ Java 服务只需要其实际配置变量；Notification 不需要数据库变�
 
 ## IDEA
 
-1. **File → Open** `/Users/shilo/Projects/P5project`，SDK 与语言级别均选 **21**。
-2. 在 Maven 工具窗口 **Link Maven Projects / +** 关联四个服务的 `pom.xml`；根目录没有聚合 POM。Maven 选择 **Wrapper**，importer / runner JDK 选 21。
+1. **File → Open** 仓库的 `project/` 目录，SDK 与语言级别均选 **21**。
+2. 在 Maven 工具窗口 **Link Maven Projects / +** 关联四个服务的 `pom.xml`；`project/` 没有聚合 POM。Maven 选择 **Wrapper**，importer / runner JDK 选 21。
 3. 将 `.build-cache`、`.local` 标记为 **Excluded**，不要导入缓存中的 POM；不要提交 `.idea` 或 `*.iml`。
 4. 先在终端运行 `db-init`。为各个 Java Application 配置环境变量（从本地 `.env` 手动复制，不写进受版本控制的共享运行配置）；或直接在 IDEA Terminal 使用 `dev.py`。
 5. 分别运行 `com.p5auction.user.UserServiceApplication`、`com.p5auction.item.ItemServiceApplication`、`com.p5auction.auction.AuctionServiceApplication`、`com.p5auction.notification.NotificationServiceApplication`。普通 `main` 即可，无须 Spring 专用 IDE 功能。

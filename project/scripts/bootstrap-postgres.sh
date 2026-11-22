@@ -1,7 +1,7 @@
 #!/bin/sh
 # Optional repository-local installation. No sudo, Homebrew or changes to existing PostgreSQL.
 set -eu
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/../.."
 cache="$PWD/.build-cache"
 version=17.6
 if [ -x "$cache/postgres/bin/postgres" ]; then

@@ -15,13 +15,15 @@ import time
 import urllib.request
 
 ROOT = Path(__file__).resolve().parents[1]
-LOCAL = ROOT / '.local'
+CHECKOUT = ROOT.parent
+LOCAL = CHECKOUT / '.local'
+CACHE = CHECKOUT / '.build-cache'
 SERVICES = ['user', 'item', 'auction', 'notification']
 
 
 def environment():
     env = os.environ.copy()
-    config = ROOT / '.env'
+    config = CHECKOUT / '.env'
     if config.exists():
         for line in config.read_text().splitlines():
             line = line.strip()
@@ -30,14 +32,14 @@ def environment():
                 if not sep or not key.replace('_', '').isalnum():
                     raise SystemExit('Invalid .env format; use KEY=value without shell expressions.')
                 env.setdefault(key, value)
-    env['MAVEN_USER_HOME'] = str(ROOT / '.build-cache/maven')
+    env['MAVEN_USER_HOME'] = str(CACHE / 'maven')
     return env
 
 
 def pg_bin():
     configured = os.environ.get('PG_BIN') or environment().get('PG_BIN')
     choices = [Path(configured)] if configured else []
-    choices += [ROOT / '.build-cache/postgres/bin', Path('/opt/homebrew/opt/postgresql@17/bin'),
+    choices += [CACHE / 'postgres/bin', Path('/opt/homebrew/opt/postgresql@17/bin'),
                 Path('/opt/homebrew/opt/postgresql@18/bin'), Path('/Applications/Postgres.app/Contents/Versions/latest/bin')]
     if shutil.which('pg_ctl'):
         choices.append(Path(shutil.which('pg_ctl')).parent)
@@ -48,7 +50,7 @@ def pg_bin():
 
 
 def init_env():
-    path = ROOT / '.env'
+    path = CHECKOUT / '.env'
     if path.exists():
         print('.env already exists; preserved.')
         return
@@ -178,7 +180,7 @@ def build():
     for name in SERVICES:
         subprocess.run([str(ROOT / (name + '-service') / 'mvnw'), '-B', '-f',
                         str(ROOT / (name + '-service') / 'pom.xml'),
-                        '-Dmaven.repo.local=' + str(ROOT / '.build-cache/repository'), 'verify'], env=env, check=True)
+                        '-Dmaven.repo.local=' + str(CACHE / 'repository'), 'verify'], env=env, check=True)
         LOCAL.mkdir(mode=0o700, exist_ok=True)
         jar = ROOT / (name + '-service') / 'target' / (name + '-service-0.0.1-SNAPSHOT.jar')
         (LOCAL / (name + '.build.json')).write_text(json.dumps({'source': fingerprint(name), 'jar': hashlib.sha256(jar.read_bytes()).hexdigest()}))
