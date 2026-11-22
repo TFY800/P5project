@@ -49,7 +49,7 @@ function renderNav() {
   if (user) nav.append(link('My auctions', '/mine'), el('span', {class: 'user-name'}, user.displayName), button('Log out', () => {
     sessionStorage.removeItem('accessToken'); token = null; user = null; renderNav(); location.hash = '#/'; route();
   }, 'text-button'));
-  else nav.append(link('Log in', '/login'), link('Join SecondRound', '/register', 'button small'));
+  else nav.append(link('Log in', '/login'), link('Create account', '/register', 'button small'));
 }
 function requireLogin() {
   if (user) return true;
@@ -76,19 +76,24 @@ function card(a) {
   anchor.setAttribute('aria-label', `${a.name || 'Auction'} · ${money(a.currentPrice)} · ${a.status}`);
   anchor.append(el('article', {},
     el('div', {class: 'card-image'}, a.imageUrl ? image(a.imageUrl, a.name) : el('span', {}, 'Preparing your listing…'), el('span', {class: `badge ${a.status.toLowerCase()}`}, state)),
-    el('div', {class: 'card-body'}, el('h3', {}, a.name || (a.status === 'FAILED' ? 'Auction not created' : 'Pending auction')), el('p', {class: 'muted card-clock', ...(a.status === 'ACTIVE' ? {'data-end':a.endsAt} : {})}, a.status === 'ACTIVE' ? remaining(a.endsAt) : a.status === 'PREPARING' ? 'Recovering item connection automatically' : a.status === 'FAILED' ? a.failure : 'Auction ended'),
+    el('div', {class: 'card-body'}, el('h3', {}, a.name || (a.status === 'FAILED' ? 'Auction not created' : 'Pending auction')), el('p', {class: 'muted card-clock', ...(a.status === 'ACTIVE' ? {'data-end':a.endsAt} : {})}, a.status === 'ACTIVE' ? remaining(a.endsAt) : a.status === 'PREPARING' ? 'Waiting for the item service' : a.status === 'FAILED' ? a.failure : 'Auction ended'),
       el('div', {class: 'card-price'}, el('strong', {}, money(a.currentPrice)), el('span', {}, 'View auction ↗')))));
   return anchor;
 }
 async function home(page = 0, query = '') {
   dispose();
   const mine = ++routeId;
-  const search = el('input', {type: 'search', name: 'q', placeholder: 'Search for your next great find', value: query, maxlength: 120, 'aria-label': 'Search auctions'});
+  const search = el('input', {type: 'search', name: 'q', placeholder: 'Search by item name', value: query, maxlength: 120, 'aria-label': 'Search auctions'});
   const searchForm = el('form', {class: 'search', onsubmit: e => {e.preventDefault(); home(0, search.value);}}, search, el('button', {}, 'Search'));
   const content = el('section', {class: 'grid'}, empty('Loading auctions…'));
   const pagination = el('div');
-  app.replaceChildren(el('section', {class: 'hero'}, el('div', {}, el('p', {class: 'eyebrow'}, 'PRE-LOVED. READY FOR WHAT’S NEXT.'), el('h1', {}, 'A little history.\nA new beginning.'), el('p', {}, 'Discover second-hand treasures, place your bid and give good things another round.'), link('Start selling ↗', '/sell', 'button')), el('div', {class: 'hero-note'}, el('span', {}, '↻'), el('strong', {}, 'Find it. Bid for it. Love it.'), el('p', {}, 'Live auctions · Real people · Whole HUF'))),
-    el('section', {class: 'section-title'}, el('div', {}, el('p', {class: 'eyebrow'}, 'THE NEXT ROUND'), el('h2', {}, 'Discover auctions')), searchForm), content, pagination);
+  app.replaceChildren(
+    el('section', {class: 'hero'},
+      el('h1', {}, 'Second-hand auctions'),
+      el('p', {}, 'Browse used items and follow bids live.'),
+      link('Sell an item', '/sell', 'button')),
+    el('section', {class: 'section-title'}, el('h2', {}, 'All auctions'), searchForm),
+    content, pagination);
   let loading = false;
   async function load() {
     if (loading || mine !== routeId) return;
@@ -96,7 +101,7 @@ async function home(page = 0, query = '') {
     try {
       const result = await api('auction', `/api/auctions?page=${page}&size=12&q=${encodeURIComponent(query)}`);
       if (mine !== routeId) return;
-      content.replaceChildren(...(result.content.length ? result.content.map(card) : [empty('No auctions yet. Be the first to list something worth another round.')]));
+      content.replaceChildren(...(result.content.length ? result.content.map(card) : [empty('No auctions found.')]));
       pagination.replaceChildren(pager(page, result.totalElements, 12, p => home(p, query)));
     } catch(e) { if (mine === routeId) content.replaceChildren(empty(e.message), button('Try again', load)); }
     finally { loading = false; }
@@ -113,13 +118,13 @@ function authPage(register) {
   const error = el('p', {role: 'status'});
   const form = el('form', {class: 'panel auth'});
   const submit = el('button', {type: 'submit'}, register ? 'Create account' : 'Log in');
-  form.append(el('p', {class: 'eyebrow'}, register ? 'WELCOME TO THE NEXT ROUND' : 'GOOD TO SEE YOU AGAIN'), el('h1', {}, register ? 'Make yourself at home.' : 'Welcome back.'),
+  form.append(el('h1', {}, register ? 'Create an account' : 'Log in'),
     ...(register ? [field('Display name', 'displayName', 'text', {maxlength: 80, autocomplete: 'nickname'})] : []),
     field('Email address', 'email', 'email', {maxlength: 254, autocomplete: 'email'}),
     field('Password', 'password', 'password', {minlength: register ? 10 : 1, maxlength: 72, autocomplete: register ? 'new-password' : 'current-password'}),
     ...(register ? [el('p', {class: 'muted'}, 'Use at least 10 characters, at most 72 UTF-8 bytes.')] : []),
-    error, submit, el('p', {}, register ? 'Already a member? ' : 'New around here? ', link(register ? 'Log in' : 'Create an account', register ? '/login' : '/register')),
-    el('small', {class: 'muted'}, 'Login lasts one hour. This tab stores your token in sessionStorage; closing the tab ends the browser session.'));
+    error, submit, el('p', {}, register ? 'Already have an account? ' : 'Need an account? ', link(register ? 'Log in' : 'Create an account', register ? '/login' : '/register')),
+    el('small', {class: 'muted'}, 'You stay signed in for up to one hour in this tab.'));
   form.addEventListener('submit', async e => {
     e.preventDefault(); submit.disabled = true; flash(error, 'Please wait…', true);
     const values = Object.fromEntries(new FormData(form));
@@ -138,17 +143,17 @@ function sellPage() {
   let draft;
   try { draft = JSON.parse(sessionStorage.getItem(draftKey)); } catch {}
   const msg = el('p', {role: 'status'});
-  const itemFields = el('fieldset', {}, el('legend', {}, '1. Tell us about your item'), field('Item name', 'name', 'text', {maxlength: 120}),
+  const itemFields = el('fieldset', {}, el('legend', {}, 'Item details'), field('Item name', 'name', 'text', {maxlength: 120}),
     field('Description & condition', 'description', 'textarea', {maxlength: 4000, rows: 5}), field('Image URL (HTTP or HTTPS)', 'imageUrl', 'url', {maxlength: 2000, placeholder: 'https://…'}));
-  const auctionFields = el('fieldset', {}, el('legend', {}, '2. Set up the auction'), el('div', {class: 'two-cols'}, field('Starting price · HUF', 'startingPrice', 'number', {min: 1, max: 1000000000000, step: 1}), field('Minimum raise · HUF', 'minimumIncrement', 'number', {min: 1, max: 1000000000000, step: 1})), field('Ends at (your local time)', 'endsAt', 'datetime-local'));
-  const submit = el('button', {type: 'submit'}, draft ? 'Retry / recover this publication' : 'Publish auction ↗');
-  const form = el('form', {class: 'panel sell'}, el('p', {class: 'eyebrow'}, 'PASS ON SOMETHING GOOD'), el('h1', {}, 'Give it another round.'), el('p', {class: 'muted'}, 'Your auction starts immediately. Item details are frozen once the auction is reserved.'), itemFields, auctionFields, msg, submit);
+  const auctionFields = el('fieldset', {}, el('legend', {}, 'Auction details'), el('div', {class: 'two-cols'}, field('Starting price · HUF', 'startingPrice', 'number', {min: 1, max: 1000000000000, step: 1}), field('Minimum raise · HUF', 'minimumIncrement', 'number', {min: 1, max: 1000000000000, step: 1})), field('Ends at (your local time)', 'endsAt', 'datetime-local'));
+  const submit = el('button', {type: 'submit'}, draft ? 'Retry publishing' : 'Publish auction');
+  const form = el('form', {class: 'panel sell'}, el('h1', {}, 'Sell an item'), el('p', {class: 'muted'}, 'The auction starts as soon as the item is ready. You can edit item details before it is added to an auction.'), itemFields, auctionFields, msg, submit);
   function showDraft() {
     if (!draft) return;
     for (const [name, value] of Object.entries(draft.fields)) if (form.elements[name]) form.elements[name].value = value;
     for (const input of itemFields.elements) input.readOnly = true;
     if (draft.end) for (const input of auctionFields.elements) input.readOnly = true;
-    flash(msg, draft.itemId ? `Item saved (${draft.itemId}). Retry uses the same item and auction request; no duplicate auction will be created.` : 'A publication is pending. Retry uses the same details and request keys.', true);
+    flash(msg, draft.itemId ? 'Item saved. Retry to finish publishing the auction.' : 'Auction setup is pending. You can retry with these details.', true);
   }
   showDraft();
   form.addEventListener('submit', async e => {
@@ -166,13 +171,13 @@ function sellPage() {
         const item = await api('item', '/api/items', {method: 'POST', headers: {'Idempotency-Key': draft.itemKey}, body: JSON.stringify({name: draft.fields.name, description: draft.fields.description, imageUrl: draft.fields.imageUrl})});
         draft.itemId = item.id; sessionStorage.setItem(draftKey, JSON.stringify(draft));
       }
-      flash(msg, 'Item saved. Reserving and freezing auction…', true);
+      flash(msg, 'Item saved. Creating the auction…', true);
       const auction = await api('auction', '/api/auctions', {method: 'POST', headers: {'Idempotency-Key': draft.auctionKey}, body: JSON.stringify({itemId: draft.itemId, startingPrice: Number(draft.fields.startingPrice), minimumIncrement: Number(draft.fields.minimumIncrement), endsAt: draft.end})});
-      if (auction.status === 'FAILED') throw new Error(`Item is still saved; auction failed: ${auction.failure}. Check My auctions for the recovery record.`);
+      if (auction.status === 'FAILED') throw new Error(`Item is still saved; auction failed: ${auction.failure}. See My auctions for details.`);
       sessionStorage.removeItem(draftKey); location.hash = `#/auction/${auction.id}`;
     } catch (e) { flash(msg, e.message + ' Your draft is saved in this tab.'); } finally { submit.disabled = false; }
   });
-  form.append(button('Discard local draft', () => { sessionStorage.removeItem(draftKey); sellPage(); }, 'text-button'), el('small', {class: 'muted'}, 'Discard only clears this tab’s draft. Any saved item or reserved auction remains visible in My auctions / My items.'));
+  form.append(button('Discard local draft', () => { sessionStorage.removeItem(draftKey); sellPage(); }, 'text-button'), el('small', {class: 'muted'}, 'Saved items and auctions stay in My auctions after you discard the draft.'));
   app.replaceChildren(form);
 }
 async function detailPage(id) {
@@ -185,13 +190,13 @@ async function detailPage(id) {
   const countdown = el('p', {class: 'countdown'}); const result = el('p', {class: 'result', role: 'status'});
   const connection = el('span', {class: 'connection', role: 'status'}, 'Connecting…');
   const amount = el('input', {type: 'number', id: 'bid-amount', name: 'amount', min: 1, step: 1, max: 1000000000000, required: true, 'aria-label': 'Your bid in HUF'});
-  const feedback = el('p', {role: 'status'}); const bidButton = el('button', {type: 'submit'}, 'Place bid ↗');
+  const feedback = el('p', {role: 'status'}); const bidButton = el('button', {type: 'submit'}, 'Place bid');
   const bidForm = el('form', {class: 'bid-form'}, el('label', {}, 'Your bid · HUF', amount), bidButton, feedback);
   const history = el('ol', {class: 'bid-history'}); const historyTitle = el('h2', {}, 'Bid history');
   const moreHistory = button('Load older bids', () => loadHistory());
   const panel = el('div', {class: 'detail-panel'}, el('div', {class: 'detail-top'}, state, connection), title, el('p', {class: 'eyebrow'}, 'CURRENT PRICE'), price, minimum, countdown, result, bidForm, desc);
   shell.append(media, panel);
-  app.replaceChildren(link('← Back to explore', '/'), shell, el('section', {class: 'panel history-panel'}, historyTitle, history, moreHistory));
+  app.replaceChildren(link('← Back to auctions', '/'), shell, el('section', {class: 'panel history-panel'}, historyTitle, history, moreHistory));
   let current = null, live, timer, bidPage = 0, offset = 0;
   async function loadHistory() {
     if (!current) return;
@@ -213,7 +218,7 @@ async function detailPage(id) {
     current = a; offset = Date.parse(a.serverTime) - Date.now();
     if (first) { media.replaceChildren(a.imageUrl ? image(a.imageUrl, a.name) : empty('Preparing item…')); }
     if (a.imageUrl && !media.querySelector('img')) media.replaceChildren(image(a.imageUrl, a.name));
-    title.textContent = a.name || (a.status === 'FAILED' ? 'Auction not created' : 'Preparing auction…'); desc.textContent = a.description || (a.status === 'FAILED' ? 'This creation was rejected. The item and any other auction have been preserved. Check My items before starting another publication.' : 'We are connecting to the item service. This page will recover automatically.');
+    title.textContent = a.name || (a.status === 'FAILED' ? 'Auction not created' : 'Preparing auction…'); desc.textContent = a.description || (a.status === 'FAILED' ? 'Check My items for the saved listing.' : 'Waiting for the item service. This page will update when the auction is ready.');
     price.textContent = money(a.currentPrice); minimum.textContent = `Next minimum ${money(a.nextMinimum)} · Raise ${money(a.minimumIncrement)}`;
     state.textContent = a.status; state.className = `badge ${a.status.toLowerCase()}`;
     if (a.status === 'ENDED') result.textContent = a.leadingBidder ? (a.leadingBidder === user?.id ? 'You won this auction!' : `Sold to bidder ${a.leadingBidder.slice(0, 8)} for ${money(a.currentPrice)}.`) : 'No bids. This item did not sell.';
@@ -224,13 +229,13 @@ async function detailPage(id) {
     bidButton.disabled = !user || user.id === a.sellerId || a.status !== 'ACTIVE';
     if (!user) feedback.replaceChildren(link('Log in to place a bid', '/login'));
     historyTitle.textContent = `Bid history (${data.bidCount})`;
-    history.replaceChildren(...(data.bids.length ? data.bids.map(bidRow) : [el('li', {}, 'No bids yet. The first one could be yours.')]));
+    history.replaceChildren(...(data.bids.length ? data.bids.map(bidRow) : [el('li', {}, 'No bids yet.')]));
     bidPage = 0; moreHistory.hidden = data.bidCount <= 50;
     tick();
   }
   function tick() {
     if (!current) return;
-    countdown.textContent = current.status === 'ACTIVE' ? remaining(current.endsAt, offset) : current.status === 'PREPARING' ? 'Recovering creation · please wait' : 'Auction closed';
+    countdown.textContent = current.status === 'ACTIVE' ? remaining(current.endsAt, offset) : current.status === 'PREPARING' ? 'Setting up the auction…' : 'Auction closed';
   }
   bidForm.addEventListener('submit', async e => {
     e.preventDefault(); if (!user || !current) return;
@@ -258,11 +263,11 @@ async function minePage(mode = 'mine', page = 0) {
   const content = el('section', {class: 'grid'}, empty('Loading your auctions…'));
   const tabs = el('div', {class: 'tabs'}, ...[['mine','Selling'],['participated','Bidding'],['won','Won'],['items','My items']].map(([id,label]) => button(label, () => minePage(id), mode === id ? 'button small' : 'secondary')));
   const pagination = el('div');
-  app.replaceChildren(el('p', {class: 'eyebrow'}, 'YOUR SECOND ROUND'), el('h1', {}, 'My auctions'), tabs, content, pagination);
+  app.replaceChildren(el('h1', {}, 'My auctions'), tabs, content, pagination);
   try {
     const data = await api(mode === 'items' ? 'item' : 'auction', mode === 'items' ? `/api/items/mine?page=${page}` : `/api/auctions/${mode}?page=${page}`);
     if(generation !== routeId)return;
-    content.replaceChildren(...(data.content.length ? data.content.map(mode === 'items' ? itemCard : card) : [empty('Nothing here yet. Explore an auction or list your first item.')]));
+    content.replaceChildren(...(data.content.length ? data.content.map(mode === 'items' ? itemCard : card) : [empty('Nothing here yet.')]));
     pagination.replaceChildren(pager(page, data.totalElements, data.size, p => minePage(mode, p)));
   } catch(e) { if(generation === routeId)content.replaceChildren(empty(e.message)); }
 }
@@ -270,7 +275,7 @@ function itemCard(item) {
   const status = el('p', {role: 'status'});
   const form = el('form', {class: 'panel item-editor'}, image(item.imageUrl,item.name), field('Name','name','text',{value:item.name,maxlength:120}),field('Description','description','textarea',{maxlength:4000}),field('Image URL','imageUrl','url',{value:item.imageUrl,maxlength:2000}),status);
   form.elements.description.value = item.description;
-  if(item.frozenBy) { form.append(el('p', {class:'muted'}, 'Frozen for auction'),link('View auction',`/auction/${item.frozenBy}`)); for(const input of form.querySelectorAll('input,textarea'))input.readOnly=true; }
+  if(item.frozenBy) { form.append(el('p', {class:'muted'}, 'Item details are locked for auction'),link('View auction',`/auction/${item.frozenBy}`)); for(const input of form.querySelectorAll('input,textarea'))input.readOnly=true; }
   else {
     const save=el('button',{type:'submit'},'Save item');form.append(save);
     form.append(button('Start auction', () => {

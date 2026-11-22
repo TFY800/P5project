@@ -1,83 +1,55 @@
-# Second-Hand Auction Platform · SecondRound
+# SecondRound
 
-Programming 5 course project. A locally runnable auction website with **four independent Java 21 / Spring Boot 4.1.2 Maven services**, PostgreSQL, JWT login, transactional bidding and WebSocket updates. The client is plain HTML/CSS/JavaScript.
+A seller lists a second-hand item and sets a starting price, a minimum raise and an end time. Buyers bid in HUF. When someone places a bid, anyone watching that auction can see the new price without refreshing. The highest accepted bid wins when the auction closes.
 
-## Run on macOS
+## Run it on a Mac
 
-Requires JDK 21, Python 3 and PostgreSQL binaries. No Docker or global Maven is needed.
+Install JDK 21 and Python 3. In Finder, open `project/` and double-click [Start.command](Start.command). The script sets up PostgreSQL if needed and opens [localhost:8080](http://localhost:8080). Building PostgreSQL on the first run requires the Apple Command Line Tools. Use [Stop.command](Stop.command) to stop the website and services.
 
-**One click on Mac:** double-click [`Start.command`](Start.command) in this repository. It prepares the local database, builds only if necessary, starts the services, waits for health checks and opens the website. Double-click [`Stop.command`](Stop.command) to stop the application; PostgreSQL and all data are preserved. Existing `.env` is never overwritten. Startup works even when launched outside the repository directory.
+If the old layout is still running, use the new `Stop.command` before starting again. The [setup guide](docs/local-development.md) covers terminal commands, IntelliJ IDEA and reusing the local database.
 
-If upgrading from the earlier layout, run `project/Stop.command` once before starting the relocated application. Keep `.env`, `.local/` and `.build-cache/` at the checkout root so the scripts can reuse existing credentials, data and caches.
+## Try live bidding
 
-```sh
-cd project  # from the checkout root
-# If PostgreSQL is not installed: builds a repository-local copy; requires Apple command line tools.
-./scripts/bootstrap-postgres.sh
-python3 scripts/dev.py db-init
-python3 scripts/dev.py build
-python3 scripts/dev.py start
-```
+1. Create a seller account and choose **Sell an item**. Enter an image URL, set the auction to end a few minutes from now and publish it.
+2. Open the same auction in a separate browser window or profile. Create a buyer account there and place a bid.
+3. Check the seller's window. The price and bid history should update without a page refresh. Wait for the deadline to see the result.
 
-Open **[http://localhost:8080](http://localhost:8080)**. Register your own local account. Use a second browser tab/account to bid. Do not use `file://` or another origin.
+## Services
 
-```sh
-python3 scripts/dev.py status
-python3 scripts/dev.py stop
-python3 scripts/dev.py db-stop
-```
-
-The initializer creates `.env` with private random secrets **only if missing**, a local PostgreSQL cluster on 55432, and three databases/roles. It never drops databases or changes existing passwords. Logs, credentials, database files and Maven caches are ignored by Git. Review scripts before running. `build` stops only the JVMs it previously started before replacing their JARs; run `start` afterwards.
-
-## Implemented
-
-| Component | Port | Responsibility |
+| Folder | Port | What it does |
 | --- | --- | --- |
-| `user-service/` | 8081 | Registration, normalized unique email, BCrypt, one-hour HS256 JWT, current user |
-| `item-service/` | 8082 | Item creation, paging, details, seller-only editing, idempotent freezing |
-| `auction-service/` | 8083 | Recoverable creation, integer HUF bidding, row locks, idempotency, expiry/winners, outbox retries |
-| `notification-service/` | 8084 | Authenticated internal event intake and auction-scoped public WebSocket subscriptions |
-| `client/` | 8080 | Responsive English website, search, publishing, personal views, live details and reconnection |
+| [user-service](user-service/) | 8081 | Creates accounts and issues a login token. |
+| [item-service](item-service/) | 8082 | Saves listings and locks their details once they are attached to an auction. |
+| [auction-service](auction-service/) | 8083 | Accepts bids, updates prices and closes auctions. |
+| [notification-service](notification-service/) | 8084 | Sends WebSocket updates to viewers of the auction. |
+| [client](client/) | 8080 | Shows listings, auctions and bid history in the browser. |
 
-Each backend builds independently with its own Maven Wrapper and POM. User, Item and Auction own separate PostgreSQL databases/accounts; there are no cross-database queries. Notification has no database. `/api/health` is a process-liveness endpoint, not a readiness or dependency check.
+The four services run separately with Spring Boot. User, Item and Auction each use their own PostgreSQL database. The client is HTML, CSS and JavaScript.
 
-## Timeline
+## Weekly progress
 
-Weeks are calendar weeks based on the dates of the Git commits.
+Week 1 starts on 8 September 2026. Each row covers Tuesday through Monday. The [PTE MIK semester calendar](https://english.mik.pte.hu/semester-calendar-1) lists the autumn break as 26–30 October. A dash means there is no dated project record for that week.
 
-| Week | Goal / Milestone | Verifiable Result |
-| --- | --- | --- |
-| 2026-W43 | Create the course repository | [Initial commit](https://github.com/TFY800/P5project/commit/47d9a04) |
-| 2026-W45 | Document the platform and scaffold the services | [Design and service skeleton](https://github.com/TFY800/P5project/commit/3909532) |
-| 2026-W47 | Implement the auction workflow and live updates | [Implemented application](https://github.com/TFY800/P5project/commit/26f1113) and [verification results](docs/verification.md) |
+| Week | Dates | Work completed | Result |
+| --- | --- | --- | --- |
+| 01 | 8–14 Sep | — | — |
+| 02 | 15–21 Sep | — | — |
+| 03 | 22–28 Sep | — | — |
+| 04 | 29 Sep–5 Oct | — | — |
+| 05 | 6–12 Oct | — | — |
+| 06 | 13–19 Oct | — | — |
+| 07 | 20–26 Oct | Created the GitHub repository for the course project. | [First commit](https://github.com/TFY800/P5project/commit/47d9a04463d1293bccbf23169647a01a80acfb5e) |
+| 08 | 27 Oct–2 Nov | Autumn break through 30 Oct. | — |
+| 09 | 3–9 Nov | Wrote the auction design and set up the four Spring Boot services and web client. | [Starter version](https://github.com/TFY800/P5project/commit/3909532c4a5835642302ce983f0f990651ecb6fc) |
+| 10 | 10–16 Nov | — | — |
+| 11 | 17–23 Nov | Pushed the working auction flow, including live bids. Moved the application into `project/` and rewrote the project guide. | [Working version](https://github.com/TFY800/P5project/commit/26f1113ac9eeb01b7575c852685160488f185251), [folder change](https://github.com/TFY800/P5project/commit/fbd6209ab6651f0be838e6982a82cd5b8b4564d3) |
 
-## GitHub Projects
+## Project notes
 
-Project board link pending.
-
-## Additional Documents
-
-- [Local setup, scripts, secrets and IntelliJ IDEA](docs/local-development.md)
-- [Scope and current limits](docs/project-description.md)
+- [What the site covers](docs/project-description.md)
 - [Architecture and Mermaid diagrams](docs/architecture.md)
-- [HTTP / WebSocket API and recovery protocol](docs/communication.md)
-- [Coding conventions](docs/coding-conventions.md)
-- [Architecture decisions](docs/decisions.md)
+- [HTTP and WebSocket messages](docs/communication.md)
+- [Setup and IntelliJ IDEA](docs/local-development.md)
+- [Tests and recorded results](docs/verification.md)
+- [Design choices](docs/decisions.md) and [code layout](docs/coding-conventions.md)
 - [中文代码导读](docs/code-walkthrough.md)
-- [Automated and browser verification](docs/verification.md)
-- [Original skeleton documentation, preserved verbatim](docs/history/skeleton-2026-11-03/README.md)
-
-## Verification
-
-```sh
-# First start the databases and all four services using the commands above.
-python3 tests/integration.py -v
-# Optional JavaScript state-machine test; uses Node if installed, no npm dependencies.
-node tests/live.test.mjs
-```
-
-Integration tests use the real PostgreSQL instance, real HTTP, concurrent requests and WebSocket clients. They create uniquely named test records, preserve existing data, and briefly restart managed services for recovery tests. Run only in your local development environment. Maven `verify` builds each service but does not by itself execute these cross-service tests. See the verification document for actual results and limitations.
-
-## Limits
-
-No payment, shipping, chat, proxy bidding, email verification or password reset. This course version permits one successful auction per item (including ended auctions); create a new item to relist. Pending creation is retried automatically; there is no cancellation UI. Tokens live in this tab's `sessionStorage`, which is readable by same-origin JavaScript; logout clears the browser copy but does not revoke an already issued token. Local HTTP and shared HMAC/internal secrets are for local coursework, not public deployment. No Docker, message broker, service registry, API Gateway or frontend framework is included.

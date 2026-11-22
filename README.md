@@ -1,11 +1,10 @@
 ---
-name:
-neptun:
+name: TAOFUYUAN
+neptun: GF9EDC
 ---
 
 # Programming 5
 
-This repository contains coursework for Programming 5.
+My project for Programming 5 is **SecondRound**, a website for second-hand auctions.
 
-- [Individual project: SecondRound](project/README.md)
-- [Project documentation](project/docs/)
+[Run the project, try live bidding, or see what I finished each week](project/README.md).

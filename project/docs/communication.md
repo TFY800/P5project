@@ -1,6 +1,6 @@
 # HTTP and WebSocket interfaces
 
-All examples use JSON, UUID IDs and UTC ISO-8601 timestamps. Amounts are whole HUF (1–10^12); decimals are rejected. Public data is readable without an account. Protected calls send `Authorization: Bearer <token>`; do not put the token in URLs or logs.
+The browser uses HTTP for actions like posting a bid and WebSocket to hear that an auction changed. Requests and responses use JSON and UUIDs. Timestamps use UTC ISO 8601. Bids are whole HUF from 1 to 10¹². Requests that need login send `Authorization: Bearer <token>`.
 
 ## HTTP API
 
@@ -54,7 +54,7 @@ Acknowledgement:
 
 Unsubscribe uses `action: "unsubscribe"`. Invalid messages close the connection. Server WebSocket ping frames run every 20 seconds; missing pongs for 60 seconds remove the connection. Browsers answer protocol pings automatically.
 
-Event example (illustrative format, not seeded application data):
+Example of a price update
 
 ```json
 {
@@ -88,14 +88,14 @@ sequenceDiagram
     D-->>A: Commit
     A-->>B: Accepted bid
     A->>N: Background outbox delivery with internal key
-    N-->>B: Confirmed event hint
-    N-->>V: Hint only if subscribed to this auction
-    V->>A: Read authoritative snapshot
+    N-->>B: Auction changed
+    N-->>V: Auction changed if subscribed
+    V->>A: Read current auction details
     A-->>V: Versioned price and bid history
 ```
 
-## Reconnect and race handling
+## What happens on reconnect
 
-The frontend registers handlers before subscribing, reads after acknowledgement, and marks an in-flight read dirty when another event arrives. It repeats the read until the in-flight hints are reconciled. Reconnect uses bounded exponential delay plus jitter and resubscribes. Old events and duplicate event IDs are ignored; gaps trigger a snapshot read. A late HTTP response cannot replace a higher version. Push events never directly set prices.
+After reconnecting, the page subscribes again and asks Auction for the latest price and bid history. If another event arrives during that HTTP request, the page reads again. It ignores duplicate events and keeps the newer data if responses arrive out of order.
 
-A ten-second HTTP poll catches an otherwise undetectable lost last event. Network failures are shown as connection/sync states; bids remain server-authoritative. Browser countdown uses serverTime only for display. Local computer sleep or clock changes may make display approximate; the server lock/time decision remains final.
+The page also checks over HTTP every ten seconds in case it misses a final event. The countdown uses server time as a reference. The server itself decides whether a bid arrived in time.
